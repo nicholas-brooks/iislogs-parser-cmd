@@ -68,8 +68,6 @@ namespace iislogsanalyser
                 {
                     foreach(var log in parser.ParseLog())
                     {
-                        if (log.csUriStem.Contains("/Content/"))
-                            continue;
                         try
                         {
                             var ((osFamily, os), (browserFamily, browser)) = GetUserAgent(log.csUserAgent);
