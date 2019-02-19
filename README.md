@@ -9,14 +9,18 @@ This was developed and run with .net core 2.2.
 
 ## To Run
 
-`cd app
-dotnet run SOURCE_FOLDER DESTINATION_PATH`
+```
+cd app
+dotnet run SOURCE_FOLDER DESTINATION_PATH
+```
 
 
 ## To Build
 
-`cd app
-dotnet build`
+```
+cd app
+dotnet build
+```
 
 
 ## Thanks To
