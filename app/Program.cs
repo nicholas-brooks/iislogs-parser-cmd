@@ -1,15 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using IISLogParser;
+﻿using IISLogParser;
 using UAParser;
-using System.Linq;
-using System.IO;
 
 namespace iislogsanalyser
 {
-    class Program
+    static class Program
     {
-        private static Parser AgentParser = Parser.GetDefault();
+        private static readonly Parser AgentParser = Parser.GetDefault();
 
         static int Main(string[] args)
         {
@@ -18,14 +14,12 @@ namespace iislogsanalyser
             if (status != 0)
                 return status;
 
-            using (var stream = File.CreateText(destination))
+            using var stream = File.CreateText(destination);
+            stream.WriteLine("Timestamp,OS Family,OS,Browser Family,Browser,Request,Method,Status,Duration");
+            foreach (var file in Directory.EnumerateFiles(source, "*.log").OrderBy(x => x))
             {
-                stream.WriteLine("Timestamp,OS Family,OS,Browser Family,Browser,Request,Method,Status,Duration");
-                foreach (var file in Directory.EnumerateFiles(source, "*.log").OrderBy(x => x))
-                {
-                    Console.WriteLine($"Parsing ${file} ...");
-                    ParseContentsInto(stream, file);
-                }
+                Console.WriteLine($"Parsing ${file} ...");
+                ParseContentsInto(stream, file);
             }
 
             return 0;
@@ -62,21 +56,19 @@ namespace iislogsanalyser
 
         private static void ParseContentsInto(StreamWriter stream, string filePath)
         {
-            using (var parser = new ParserEngine(filePath))
+            using var parser = new ParserEngine(filePath);
+            while (parser.MissingRecords)
             {
-                while (parser.MissingRecords)
+                foreach(var log in parser.ParseLog())
                 {
-                    foreach(var log in parser.ParseLog())
+                    try
                     {
-                        try
-                        {
-                            var ((osFamily, os), (browserFamily, browser)) = GetUserAgent(log.csUserAgent);
-                            stream.WriteLine($"{log.DateTimeEvent.ToString("yyyy-MM-dd HH:mm:ss")},{osFamily},{os},{browserFamily},{browser},{log.csUriStem},{log.csMethod},{log.scStatus},{log.timeTaken}");
-                        }
-                        catch (Exception e)
-                        {
-                            Show($"Error - {e.Message}");
-                        }
+                        var ((osFamily, os), (browserFamily, browser)) = GetUserAgent(log.csUserAgent);
+                        stream.WriteLine($"{log.DateTimeEvent:yyyy-MM-dd HH:mm:ss},{osFamily},{os},{browserFamily},{browser},{log.csUriStem},{log.csMethod},{log.scStatus},{log.timeTaken}");
+                    }
+                    catch (Exception e)
+                    {
+                        Show($"Error - {e.Message}");
                     }
                 }
             }
@@ -84,7 +76,7 @@ namespace iislogsanalyser
 
         private static void ShowHelp()
         {
-            const string Help =
+            const string help =
 @"iisloganalyser SOURCE_FOLDER DESTINATION_PATH
 
   Where:
@@ -92,7 +84,7 @@ namespace iislogsanalyser
     DESTINATION_PATH    CSV File to write parsed logs to. (e.g. output.csv).
                         Must not exist.
 ";
-            Show(Help);
+            Show(help);
         }
 
         private static void Show(string msg)
@@ -108,42 +100,26 @@ namespace iislogsanalyser
             return (GetOS(clientInfo.OS), GetBrowser(clientInfo.UA));
         }
 
-        private static (string family, string os) GetOS(OS os)
-        {
-            switch (os.Family)
+        private static (string family, string os) GetOS(OS os) =>
+            os.Family switch
             {
-                case "Windows":
-                    switch (os.Major)
-                    {
-                        case "XP":
-                            return (os.Family, "Windows XP");
-                        case "Vista":
-                            return (os.Family, "Windows Vista");
-                        case "8":
-                            return (os.Family, $"{os.Family} {os.Major}.{os.Minor}");
-                        default:
-                            return (os.Family, $"{os.Family} {os.Major}");
-                    }
-                case "Mac OS X":
-                    return (os.Family, $"{os.Family} {os.Major}.{os.Minor}");
-                case "Ubuntu":
-                case "Windows NT 4.0":
-                case "Other":
-                    return (os.Family, os.Family);
-                default:
-                    return (os.Family, $"{os.Family} {os.Major}");
-            }
-        }
+                "Windows" => os.Major switch
+                {
+                    "XP" => (os.Family, "Windows XP"),
+                    "Vista" => (os.Family, "Windows Vista"),
+                    "8" => (os.Family, $"{os.Family} {os.Major}.{os.Minor}"),
+                    _ => (os.Family, $"{os.Family} {os.Major}")
+                },
+                "Mac OS X" => (os.Family, $"{os.Family} {os.Major}.{os.Minor}"),
+                "Ubuntu" or "Windows NT 4.0" or "Other" => (os.Family, os.Family),
+                _ => (os.Family, $"{os.Family} {os.Major}")
+            };
 
-        private static (string family, string browser) GetBrowser(UserAgent ua)
-        {
-            switch (ua.Family)
+        private static (string family, string browser) GetBrowser(UserAgent ua) =>
+            ua.Family switch
             {
-                case "Other":
-                    return ("Other", "Other");
-                default:
-                    return (ua.Family, $"{ua.Family} {ua.Major}");
-            }
-        }
+                "Other" => ("Other", "Other"),
+                _ => (ua.Family, $"{ua.Family} {ua.Major}")
+            };
     }
 }
